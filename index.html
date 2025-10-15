@@ -602,7 +602,12 @@
         // If using weserv proxy, compute the original URL as an alternate source
         let triedAlt = false;
         const isProxy = img.src.includes('images.weserv.nl/?url=');
-        const altSrc = isProxy ? decodeURIComponent(img.src.split('url=')[1]) : null;
+        let altSrc = null;
+        if (isProxy){
+          const raw = decodeURIComponent((img.src.split('url=')[1] || '').trim());
+          // Ensure we have a proper scheme for the alt source
+          altSrc = raw ? (raw.startsWith('http') ? raw : `https://${raw}`) : null;
+        }
 
         img.addEventListener('error', ()=>{
           const currentSrc = img.getAttribute('src') || '';
@@ -670,11 +675,12 @@
     const openAllBtn = document.getElementById('openAll');
     if (openAllBtn){
       openAllBtn.addEventListener('click', () => {
+        // Use search endpoints to avoid region-locked or missing album pages
         const urls = [
           "https://www.youtube.com/@LofiGirl/live",
-          "https://open.spotify.com/playlist/37i9dQZF1DX2sUQwD7tbmL",
-          "https://open.spotify.com/album/1lQ3ugvGgaUe5hGJ9Q3T4h",
-          "https://open.spotify.com/album/6s2wP3GzHkYcbH7LpU1Agp"
+          "https://open.spotify.com/search/Chillhop%20Essentials",
+          "https://open.spotify.com/search/Ludovico%20Einaudi%20Islands",
+          "https://open.spotify.com/search/Max%20Richter%20Sleep"
         ];
         urls.forEach(u => window.open(u, '_blank', 'noopener'));
       });
@@ -686,7 +692,7 @@
     const setTheme = (mode) => {
       document.documentElement.style.colorScheme = mode;
       localStorage.setItem('pharm-theme', mode);
-      toggleBtn.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+      if (toggleBtn) toggleBtn.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
     };
     (function initTheme(){
       const saved = localStorage.getItem('pharm-theme');
