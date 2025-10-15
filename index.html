@@ -601,6 +601,7 @@
       document.querySelectorAll('img.cover, img.thumb').forEach(img=>{
         // If using weserv proxy, compute the original URL as an alternate source
         let triedAlt = false;
+        let triedYouTubeAlt = false;
         const isProxy = img.src.includes('images.weserv.nl/?url=');
         let altSrc = null;
         if (isProxy){
@@ -616,6 +617,18 @@
             triedAlt = true;
             img.src = altSrc;
             return;
+          }
+          // Second fallback for YouTube thumbnails: swap hqdefault <-> maxresdefault
+          const isYTThumb = /https?:\/\/img\.youtube\.com\/vi\//.test(currentSrc);
+          if (isYTThumb && !triedYouTubeAlt){
+            triedYouTubeAlt = true;
+            const nextSrc = currentSrc.includes('hqdefault.jpg')
+              ? currentSrc.replace('hqdefault.jpg','maxresdefault.jpg')
+              : currentSrc.replace('maxresdefault.jpg','hqdefault.jpg');
+            if (nextSrc && nextSrc !== currentSrc){
+              img.src = nextSrc;
+              return;
+            }
           }
           // Final fallback: inline SVG placeholder
           if (!img.dataset.fallbacked){
