@@ -599,12 +599,25 @@
     const FALLBACK_DATA = `data:image/svg+xml;charset=utf-8,${FALLBACK_SVG}`;
     function attachImgFallbacks(){
       document.querySelectorAll('img.cover, img.thumb').forEach(img=>{
+        // If using weserv proxy, compute the original URL as an alternate source
+        let triedAlt = false;
+        const isProxy = img.src.includes('images.weserv.nl/?url=');
+        const altSrc = isProxy ? decodeURIComponent(img.src.split('url=')[1]) : null;
+
         img.addEventListener('error', ()=>{
+          const currentSrc = img.getAttribute('src') || '';
+          // First fallback: if proxied URL fails, try the raw original URL once
+          if (isProxy && !triedAlt && altSrc && currentSrc !== altSrc){
+            triedAlt = true;
+            img.src = altSrc;
+            return;
+          }
+          // Final fallback: inline SVG placeholder
           if (!img.dataset.fallbacked){
             img.dataset.fallbacked = '1';
             img.src = FALLBACK_DATA;
           }
-        }, { once:true });
+        }, { once:false });
       });
     }
     document.addEventListener('DOMContentLoaded', attachImgFallbacks);
@@ -613,7 +626,7 @@
     function linkCoversToPrimary(){
       document.querySelectorAll('.card').forEach(card=>{
         const cover = card.querySelector('img.cover');
-        const primary = card.querySelector('.btnrow a.btn');
+        const primary = card.querySelector('.btnrow a[href*="open.spotify.com"], .btnrow a[href*="youtube.com"], .btnrow a.btn');
         if (cover && primary){
           cover.style.cursor = 'pointer';
           cover.addEventListener('click', ()=> window.open(primary.href, '_blank', 'noopener'));
@@ -621,6 +634,37 @@
       });
     }
     document.addEventListener('DOMContentLoaded', linkCoversToPrimary);
+
+    // --- Normalize Spotify links to search pages (region-proof) ---
+    function normalizeSpotifyLinks(){
+      document.querySelectorAll('.card').forEach(card=>{
+        const titleEl = card.querySelector('.meta h3');
+        if (!titleEl) return;
+        const query = encodeURIComponent(titleEl.textContent.replace(/\s+/g,' ').trim());
+        card.querySelectorAll('.btnrow a[href*="open.spotify.com"]').forEach(a=>{
+          try{
+            const url = new URL(a.href);
+            if (!url.pathname.startsWith('/search')){
+              a.href = `https://open.spotify.com/search/${query}`;
+            }
+          }catch(e){}
+        });
+      });
+    }
+    document.addEventListener('DOMContentLoaded', normalizeSpotifyLinks);
+
+    // --- Normalize brittle YouTube watch links to stable searches when possible ---
+    function normalizeYouTubeLinks(){
+      document.querySelectorAll('.card').forEach(card=>{
+        const titleEl = card.querySelector('.meta h3');
+        if (!titleEl) return;
+        const query = encodeURIComponent(titleEl.textContent.replace(/\s+/g,' ').trim());
+        card.querySelectorAll('.btnrow a[href*="youtube.com/watch"], .thumbs a[href*="youtube.com/watch"], .thumbs a[href^="https://youtu.be/"]').forEach(a=>{
+          a.href = `https://www.youtube.com/results?search_query=${query}`;
+        });
+      });
+    }
+    document.addEventListener('DOMContentLoaded', normalizeYouTubeLinks);
 
     // Open top playlists in new tabs for quick start
     const openAllBtn = document.getElementById('openAll');
