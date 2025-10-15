@@ -596,7 +596,8 @@
         </g>
       </svg>
     `);
-    const FALLBACK_DATA = `data:image/svg+xml;charset=utf-8,${FALLBACK_SVG}`;
+  const FALLBACK_DATA = `data:image/svg+xml;charset=utf-8,${FALLBACK_SVG}`;
+  const FALLBACK_TIMEOUT_MS = 4000; // Force fallback if image is still not loaded after this time
     function attachImgFallbacks(){
       document.querySelectorAll('img.cover, img.thumb').forEach(img=>{
         // If using weserv proxy, compute the original URL as an alternate source
@@ -610,34 +611,52 @@
           altSrc = raw ? (raw.startsWith('http') ? raw : `https://${raw}`) : null;
         }
 
-        img.addEventListener('error', ()=>{
-          const currentSrc = img.getAttribute('src') || '';
-          // First fallback: if proxied URL fails, try the raw original URL once
-          if (isProxy && !triedAlt && altSrc && currentSrc !== altSrc){
-            triedAlt = true;
-            img.src = altSrc;
-            return;
-          }
-          // Second fallback for YouTube thumbnails: swap hqdefault <-> maxresdefault
-          const isYTThumb = /https?:\/\/img\.youtube\.com\/vi\//.test(currentSrc);
-          if (isYTThumb && !triedYouTubeAlt){
-            triedYouTubeAlt = true;
-            const nextSrc = currentSrc.includes('hqdefault.jpg')
-              ? currentSrc.replace('hqdefault.jpg','maxresdefault.jpg')
-              : currentSrc.replace('maxresdefault.jpg','hqdefault.jpg');
-            if (nextSrc && nextSrc !== currentSrc){
-              img.src = nextSrc;
+        if (!img.dataset.errBound){
+          img.addEventListener('error', ()=>{
+            const currentSrc = img.getAttribute('src') || '';
+            // First fallback: if proxied URL fails, try the raw original URL once
+            if (isProxy && !triedAlt && altSrc && currentSrc !== altSrc){
+              triedAlt = true;
+              img.src = altSrc;
               return;
             }
+            // Second fallback for YouTube thumbnails: swap hqdefault <-> maxresdefault
+            const isYTThumb = /https?:\/\/img\.youtube\.com\/vi\//.test(currentSrc);
+            if (isYTThumb && !triedYouTubeAlt){
+              triedYouTubeAlt = true;
+              const nextSrc = currentSrc.includes('hqdefault.jpg')
+                ? currentSrc.replace('hqdefault.jpg','maxresdefault.jpg')
+                : currentSrc.replace('maxresdefault.jpg','hqdefault.jpg');
+              if (nextSrc && nextSrc !== currentSrc){
+                img.src = nextSrc;
+                return;
+              }
+            }
+            // Final fallback: inline SVG placeholder
+            if (!img.dataset.fallbacked){
+              img.dataset.fallbacked = '1';
+              img.src = FALLBACK_DATA;
+            }
+          }, { once:false });
+          img.dataset.errBound = '1';
+        }
+
+        // If the image has already failed before the listener was bound, catch it now
+        if (img.complete && img.naturalWidth === 0){
+          // Defer to allow the browser to settle current src
+          setTimeout(()=> img.dispatchEvent(new Event('error')), 0);
+        }
+
+        // Safety net: if the image doesn't load within X ms, trigger error handler
+        setTimeout(()=>{
+          if (!img.dataset.fallbacked && (img.naturalWidth === 0 || (img.complete && img.naturalWidth === 0))){
+            img.dispatchEvent(new Event('error'));
           }
-          // Final fallback: inline SVG placeholder
-          if (!img.dataset.fallbacked){
-            img.dataset.fallbacked = '1';
-            img.src = FALLBACK_DATA;
-          }
-        }, { once:false });
+        }, FALLBACK_TIMEOUT_MS);
       });
     }
+    // Bind immediately (script is at the end of body), and also on DOMContentLoaded for safety
+    attachImgFallbacks();
     document.addEventListener('DOMContentLoaded', attachImgFallbacks);
 
     // --- Make each cover clickable to the primary link in its card ---
